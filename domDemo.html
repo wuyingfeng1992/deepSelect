@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>demo</title>
+    <script type="text/javascript" src="jquery.js"></script>
+  </head>
+  <style type="text/css">
+  	.container{
+  		width:200px;
+  		height: 320px;
+  		background: skyblue;
+  		left: 150px;
+  		top:150px;
+  		position: absolute;
+  	}
+  	.content{
+  		width: 100%;
+  		height: 100px;
+  		background: pink;
+  		position: relative;
+  	}
+  	.content.selected:after{
+  		border: 1px solid #ff0000;
+  		left: 0px;
+  		right: 0px;
+  		bottom: 0;
+  		top:0;
+  		content: '';
+  		position: absolute;
+  		pointer-events: none;
+  	}
+  	.group{
+  		position: relative;
+  		border: 1px solid blue;
+
+  		box-sizing: border-box;
+  	}
+  	.container.selected:after,.group.selected:after,.content.selected:after{
+  		border: 1px solid #ff0000;
+  		left: 0px;
+  		right:0px;
+  		bottom: 0;
+  		top:0;
+  		content: '';
+  		position: absolute;
+  		pointer-events: none;
+  	}
+  </style>
+  <body>
+
+  	<div class="container root" id='container' _nodeType='node'>
+
+  		<div class="group" id='group' _nodeType='node'>
+  			<div class="content" id='content1' _nodeType='node'>
+  			
+	  		</div>
+	  		<div class="content" id='content2' _nodeType='node'>
+	  			
+	  		</div>
+  		</div>
+  		<div class="content" id='content3' _nodeType='node'>
+	  			
+	  	</div>
+
+  	</div>
+  	
+  </body>
+  <script type="text/javascript">
+  	$(function(){
+  		/*
+  			1.解决click和dblclick的冲突 用时间解决
+  			2.解决mousemove,mouseup的冲突
+  				这个本质上来说是没有冲突的，但是最近在业务上有一个这样的效果
+  				1）mousemove的时候就是移动当前点击的对象
+  				2）只是click(mousedown,mouseup)的时候,要在该元素父亲已经选择之后它才能被选择，否则选中容器节点
+  			3.事件都绑定在window上，子元素通过事件捕获得到事件,事件主体只作用于
+  			  浏览器的某（canvas画布）部分，如浏览内有一块画布用于做H5手机页面，
+  			  可以用复合键和外部交流
+
+  		*/
+  		var DOM_EVENT=['keydown','mousedown','mousemove','mouseup','click','dblclick']
+  		var mousedown=false;
+  		var mousemove=false;
+  		var enablemove=false;
+  		var startPos={};
+  		var clickTimer=null;
+  		var mouseTimer=null;
+  		var $mouseTarget=null;
+  		var $select=null;
+  		var evtManage={
+  			watchDomEvents:function(){
+  				var that=this;
+  				var handler=function(e){
+  					that._domEventHandler(e)
+  				}
+  				$.each(DOM_EVENT,function(index,name){
+  					window.addEventListener(name,handler);
+  				})
+  			},
+  			_domEventHandler:function(e){
+  				//可在这里区分某局部事件，全局等各区事件
+  				var that=evtManage;
+  				var evtType=e.type;
+  				if(evtType=='keydown'){
+  					that._globalEvent(e);
+  				}else{
+  					//把事件交给Tools，再由Tools分给当前的Tool，目前就一个Tool
+  					//事件分发
+  					that.eventDispatch(e);
+  				}
+  			},
+  			//做冲突处理
+  			eventDispatch:function(e){
+  				var that=this;
+  				var evtType=e.type;
+  				//console.log('evtType',evtType)
+  				var event=null;
+  				switch(evtType){
+  					//200算是双击事件
+  					case 'click':
+  						clearTimeout(clickTimer)
+  						clickTimer=setTimeout(function(){
+  							that[evtType]&&that[evtType](e);
+  						},200)
+  						break;
+  					case 'dblclick':
+  						clearTimeout(clickTimer);
+  						break;  						
+  					case 'mousedown':
+  						mousedown=true
+  						break; 	
+  					case 'mousemove':
+  						if(!mousedown) return;
+  						break;					
+  					case 'mouseup':
+  						mousedown=false;
+  						break;	
+  					default:
+  						break;
+  				}
+  				if(evtType!=='click'){
+  					event=that[evtType];
+  					event&&event(e);
+  				}
+  			},
+  			_globalEvent:function(e){
+
+  			},
+  			mousedown:function(e){
+  				var that=evtManage;
+  				var $target=$(e.target);
+  				startPos.x=e.clientX;
+  				startPos.y=e.clientY;
+  				console.log($target&&$target.attr('id'))
+  				//点击空白
+  				if($target.attr('_nodeType')!=='node') $target=null;
+  				that.setMouseTarget($target)
+  				
+  			},
+  			mousemove:function(e){  				
+  				var $target=$(e.target);
+  				//防止误move
+  				if(Math.abs(startPos.x-e.clientX)<1&&Math.abs(startPos.y-e.clientY)<1) return;
+  				mousemove=true;
+  				if(!$mouseTarget) return;
+  				console.log('mousemove',$target[0].className)
+  			},
+  			mouseup:function(e){
+  				var that=evtManage;
+  				mousemove=false;
+  				console.log('mouseup')
+  				var $target=$(e.target);
+  				$mouseTarget=$mouseTarget||$target;
+  				if($mouseTarget){
+  					//that.mouseFn($mouseTarget);
+  				}else{
+  					that.setMouseTarget($target,e.type);
+  				}  				
+  			},
+  			setMouseTarget:function($target,evtType){
+  				var that=evtManage;
+  				//mousedown的target是一样的
+  				//所以不担心mouseup时down还没有执行
+  				if($target==null){
+  					$mouseTarget='null';//mouseup无法区分
+  					that.mouseFn($mouseTarget,evtType)
+  					return;
+  				}
+  				clearTimeout(mouseTimer);
+  				mouseTimer=setTimeout(function(){
+  					//前面选过父亲，也是选择子类
+
+  					//深度选择的逻辑(由父到子一层层选择)
+
+  					
+  					var selSelf=that.judeSelectSelf($target);
+  					if(!$select){
+  						$mouseTarget=$target.closest('.root')
+  					}else if(selSelf){
+  						$mouseTarget=$target;
+  					}else{
+  						$mouseTarget=$target.parent();
+  					}
+  					that.mouseFn($mouseTarget,evtType)
+  				},100)
+  			},
+  			judeSelectSelf:function($target){
+  				var flage=false;
+  				
+  				var sId=$select&&$select.attr('id');
+  				var tId=$target&&$target.attr('id');  				
+  				
+  				//上次选择是父亲
+  				var $parent=$target.parent();
+  				var pId=$parent.attr('id');
+  				var $sinblings=sId&&$target.siblings('#'+sId);
+  				var slen=$sinblings&&$sinblings.length;
+  				var $child=sId&&$target.find(`#${sId}`);
+  				var clen=$child&&$child.length;
+  				
+	  			if(mousemove){
+	  				flage=true;
+	  			}else if(!sId){
+	  				flage=true
+	  			}else if(pId==sId){
+	  				flage=true
+	  			}else if(sId==tId&&!clen){
+	  				flage=true
+	  			}else if($parent.attr('_nodeType')!=='node'){
+	  				flage=true
+	  			}else if(slen){
+	  				flage=true;
+	  			}
+	  			return flage;
+	  		},
+  				
+  			/*judeAncestor:function($target){
+  				var isAncestor=false;
+  				var sId=$select&&$select.attr('id');
+  				var tId=$target&&$target.attr('id');
+  				if(!sId||!tId) return isAncestor;
+  				sId='#'+sId;
+  				//&&tId!==sId
+  				if($target.closest(sId).length){
+  					isAncestor=true;
+  				}
+  				return isAncestor;
+
+  			},*/
+  			mouseFn:function($mouseTarget,type){
+  				//select没有变化
+  				
+  				if(!$select&&!$mouseTarget||$select&&$select.attr('id')==$mouseTarget&&$mouseTarget.attr('id').className){
+  					return;
+  				}
+  				$mouseTarget=$mouseTarget!=='null'&&$mouseTarget?$mouseTarget:'';
+  				$select&&$select.removeClass('selected');
+  				$select=$mouseTarget;
+  				$select&&$select.addClass('selected')
+  				if(type=='mouseup'){
+  					$mouseTarget=null;
+  					mousemove=false;
+  				}
+  				
+  			},
+  			click:function(e){
+  				console.log('click')
+  			},
+  			dblclick:function(e){
+  				console.log('dblclick')
+  			},
+  			keydown:function(e){
+  				console.log('keydown')
+  			},
+  			init:function(e){
+  				var that=evtManage;
+  				that.watchDomEvents();
+  			}  			
+  		}
+  		evtManage.init();
+
+
+  	})
+  </script>
+</html>
